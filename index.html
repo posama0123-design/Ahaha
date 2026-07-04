@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⚡ WebRTC Web-CAM System</title>
+  <style>
+    :root {
+      --bg-color: #0d1117;
+      --panel-bg: #161b22;
+      --accent-blue: #58a6ff;
+      --accent-green: #2ea44f;
+      --text-color: #c9d1d9;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .menu-container {
+      max-width: 500px;
+      width: 90%;
+      background: var(--panel-bg);
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 40px 30px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+      color: #fff;
+      letter-spacing: 1px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #8b949e;
+      margin-bottom: 35px;
+    }
+
+    .choice-box {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .menu-card {
+      display: block;
+      text-decoration: none;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #30363d;
+      background: rgba(255, 255, 255, 0.02);
+      transition: all 0.25s ease;
+      text-align: left;
+    }
+
+    /* カメラ側（配信）のスタイル */
+    .menu-card.camera-mode {
+      border-left: 5px solid var(--accent-green);
+    }
+    .menu-card.camera-mode:hover {
+      background: rgba(46, 164, 79, 0.1);
+      border-color: var(--accent-green);
+      transform: translateY(-2px);
+    }
+    .menu-card.camera-mode h3 { color: #56d364; }
+
+    /* モニター側（受信）のスタイル */
+    .menu-card.viewer-mode {
+      border-left: 5px solid var(--accent-blue);
+    }
+    .menu-card.viewer-mode:hover {
+      background: rgba(88, 166, 255, 0.1);
+      border-color: var(--accent-blue);
+      transform: translateY(-2px);
+    }
+    .menu-card.viewer-mode h3 { color: #79c0ff; }
+
+    .menu-card h3 {
+      margin: 0 0 5px 0;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .menu-card p {
+      margin: 0;
+      font-size: 13px;
+      color: #8b949e;
+      line-height: 1.5;
+    }
+
+    .footer-text {
+      margin-top: 35px;
+      font-size: 11px;
+      color: #484f58;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="menu-container">
+    <h1>📹 HOME CAM SYSTEM</h1>
+    <div class="subtitle">WebRTCを使用したリアルタイム監視ネットワーク</div>
+    
+    <div class="choice-box">
+      <a href="camera.html" class="menu-card camera-mode">
+        <h3>🎥 配信側 (Camera)</h3>
+        <p>この端末のカメラを起動し、監視映像の配信を開始します。部屋を設置して接続を待ち受けます。</p>
+      </a>
+
+      <a href="viewer.html" class="menu-card viewer-mode">
+        <h3>📱 閲覧側 (Viewer)</h3>
+        <p>外出先のスマホや別PCから、設置された監視カメラのライブ映像にアクセスしてリアルタイムで確認します。</p>
+      </a>
+    </div>
+
+    <div class="footer-text">Secure Signaling via Cloud Firestore</div>
+  </div>
+
+</body>
+</html>

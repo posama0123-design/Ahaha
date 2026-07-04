@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📱 監視カメラ - ビューアー</title>
+  <style>
+    body { background: #111; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
+    .container { max-width: 640px; margin: 0 auto; background: #222; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+    video { width: 100%; border: 2px solid #00ecff; border-radius: 8px; background: #000; margin-top: 15px; box-shadow: 0 0 15px rgba(0, 236, 255, 0.2); }
+    .setup-box { margin-bottom: 20px; text-align: left; background: #333; padding: 15px; border-radius: 8px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: #ccc; }
+    input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #444; background: #111; color: #fff; border-radius: 4px; box-sizing: border-box; }
+    .status { margin: 15px 0; color: #00ecff; font-weight: bold; min-height: 24px; }
+    button { width: 100%; padding: 12px; font-size: 16px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; }
+    button:disabled { background: #555; cursor: not-allowed; }
+    
+    /* 簡易的な録画風エフェクト（お好みで） */
+    .video-container { position: relative; }
+    .rec-dot { position: absolute; top: 25px; left: 25px; width: 12px; height: 12px; background: red; border-radius: 50%; display: none; animation: blink 1s infinite; }
+    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>📱 監視カメラ（ビューアー）</h2>
+    
+    <div class="setup-box">
+      <label for="roomId">🔑 接続する部屋番号</label>
+      <input type="text" id="roomId" value="my-secret-room-777" placeholder="配信側と同じ部屋番号">
+
+      <label for="roomPassword">🔒 パスワード</label>
+      <input type="password" id="roomPassword" value="" placeholder="配信側と同じパスワード">
+    </div>
+
+    <button id="joinBtn">カメラに接続する</button>
+    <div class="status" id="status">部屋番号とパスワードを入力してください。</div>
+    
+    <div class="video-container">
+      <div class="rec-dot" id="recDot"></div>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBhN4EO4f3pOvLOfQGcXsv-778Yvz7HYhg",
+      authDomain: "keizibann-b87f9.firebaseapp.com",
+      projectId: "keizibann-b87f9",
+      storageBucket: "keizibann-b87f9.firebasestorage.app",
+      messagingSenderId: "209559761940",
+      appId: "1:209559761940:web:fee2e2aaa7e3a69525e301",
+      measurementId: "G-6CLFWZ1Y2W"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const peerConfiguration = {
+      iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }]
+    };
+
+    let peerConnection = null;
+    let remoteStream = null;
+
+    const remoteVideo = document.getElementById('remoteVideo');
+    const statusText = document.getElementById('status');
+    const joinBtn = document.getElementById('joinBtn');
+    const recDot = document.getElementById('recDot');
+
+    async function joinRoom() {
+      const roomId = document.getElementById('roomId').value.trim();
+      const inputPassword = document.getElementById('roomPassword').value.trim();
+
+      if (!roomId || !inputPassword) {
+        alert("部屋番号とパスワードを入力してください！");
+        return;
+      }
+
+      statusText.innerText = "認証中...";
+      joinBtn.disabled = true;
+
+      const roomRef = doc(db, 'rooms', roomId);
+      const roomSnapshot = await getDoc(roomRef);
+
+      // 部屋が存在するかチェック
+      if (!roomSnapshot.exists()) {
+        statusText.innerText = "エラー: 指定された部屋が見つかりません（配信が始まっていないか、部屋番号が違います）";
+        joinBtn.disabled = false;
+        return;
+      }
+
+      const roomData = roomSnapshot.data();
+
+      // パスワードの判定
+      if (roomData.password !== inputPassword) {
+        statusText.innerText = "❌ パスワードが一致しません！";
+        joinBtn.disabled = false;
+        return;
+      }
+
+      statusText.innerText = "接続を確立中...";
+
+      // WebRTC接続の初期化
+      peerConnection = new RTCPeerConnection(peerConfiguration);
+
+      // 相手からの映像ストリームを受け取る準備
+      remoteStream = new MediaStream();
+      remoteVideo.srcObject = remoteStream;
+
+      peerConnection.ontrack = event => {
+        event.streams[0].getTracks().forEach(track => {
+          remoteStream.addTrack(track);
+        });
+        statusText.innerText = "⚡ ライブ映像を受信中！";
+        recDot.style.display = "block"; // RECドットを点滅させる
+      };
+
+      // ICE Candidateの設定
+      const calleeCandidatesCollection = collection(roomRef, 'calleeCandidates');
+      peerConnection.onicecandidate = event => {
+        if (event.candidate) {
+          addDoc(calleeCandidatesCollection, event.candidate.toJSON());
+        }
+      };
+
+      // 配信側のOfferをセット
+      const offer = roomData.offer;
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+      // 自分のAnswer（応答）を作成
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+
+      // AnswerをFirebaseに書き込んで、配信側に通知
+      const roomWithAnswer = {
+        answer: {
+          type: answer.type,
+          sdp: answer.sdp
+        }
+      };
+      await setDoc(roomRef, roomWithAnswer, { merge: true });
+
+      // 配信側のICE Candidateを監視して追加
+      onSnapshot(collection(roomRef, 'callerCandidates'), snapshot => {
+        snapshot.docChanges().forEach(async change => {
+          if (change.type === 'added') {
+            const data = change.doc.data();
+            await peerConnection.addIceCandidate(new RTCIceCandidate(data));
+          }
+        });
+      });
+    }
+
+    joinBtn.addEventListener('click', joinRoom);
+  </script>
+</body>
+</html>
