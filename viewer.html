@@ -3,41 +3,99 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🏠 監視カメラ - 配信側</title>
+  <title>📱 監視カメラ - ビューアー</title>
   <style>
-    body { background: #111; color: #fff; font-family: sans-serif; text-align: center; padding: 20px; }
-    .container { max-width: 640px; margin: 0 auto; background: #222; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-    video { width: 100%; border: 2px solid #333; border-radius: 8px; background: #000; margin-top: 15px; }
-    .setup-box { margin-bottom: 20px; text-align: left; background: #333; padding: 15px; border-radius: 8px; }
-    label { display: block; margin-bottom: 5px; font-weight: bold; color: #ccc; }
-    input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #444; background: #111; color: #fff; border-radius: 4px; box-sizing: border-box; }
-    .status { margin: 15px 0; color: #0f0; font-weight: bold; min-height: 24px; }
-    button { width: 100%; padding: 12px; font-size: 16px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 4px; font-weight: bold; }
-    button:disabled { background: #555; cursor: not-allowed; }
+    :root {
+      --bg-color: #0d1117;
+      --panel-bg: #161b22;
+      --accent-cyan: #00ecff;
+    }
+
+    body { background: var(--bg-color); color: #fff; font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
+    .container { max-width: 800px; margin: 0 auto; background: var(--panel-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); border: 1px solid #30363d; }
+    .setup-box { display: flex; gap: 15px; margin-bottom: 15px; text-align: left; background: #21262d; padding: 15px; border-radius: 8px; flex-wrap: wrap; }
+    .input-group { flex: 1; min-width: 200px; }
+    label { display: block; margin-bottom: 5px; font-size: 13px; color: #8b949e; }
+    input { width: 100%; padding: 8px; border: 1px solid #30363d; background: var(--bg-color); color: #fff; border-radius: 4px; box-sizing: border-box; }
+    
+    .controls { display: flex; gap: 10px; margin-bottom: 15px; }
+    button { flex: 1; padding: 12px; font-size: 15px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; transition: background 0.2s; }
+    #joinBtn { background: #238636; color: white; }
+    #joinBtn:hover { background: #2ea44f; }
+    #fullscreenBtn { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; display: none; }
+    #fullscreenBtn:hover { background: #30363d; }
+    button:disabled { background: #21262d !important; color: #484f58 !important; border: 1px solid #30363d; cursor: not-allowed; }
+
+    .status { margin-bottom: 15px; color: var(--accent-cyan); font-size: 14px; font-weight: bold; }
+    
+    .video-wrapper {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border: 2px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0, 236, 255, 0.1);
+    }
+    video { width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
+
+    .rec-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,0,0,0.6);
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      pointer-events: none;
+    }
+    .rec-dot { width: 10px; height: 10px; background: #ff7b72; border-radius: 50%; animation: blink 1s infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    video::-webkit-media-controls { display:none !important; }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <h2>🏠 監視カメラ（配信設定）</h2>
+    <h2>📱 LIVE MONITOR PANEL</h2>
     
     <div class="setup-box">
-      <label for="roomId">🔑 部屋番号 (自由な英数字)</label>
-      <input type="text" id="roomId" value="my-secret-room-777" placeholder="例: living-room-xyz">
-
-      <label for="roomPassword">🔒 簡易パスワード</label>
-      <input type="password" id="roomPassword" value="" placeholder="ここにパスワードを入力">
+      <div class="input-group">
+        <label for="roomId">🔑 接続する部屋番号</label>
+        <input type="text" id="roomId" value="my-secret-room-777">
+      </div>
+      <div class="input-group">
+        <label for="roomPassword">🔒 パスワード</label>
+        <input type="password" id="roomPassword" placeholder="パスワードを入力">
+      </div>
     </div>
 
-    <button id="startBtn" disabled>配信開始（接続待ち）</button>
-    <div class="status" id="status">カメラの起動を待っています...</div>
+    <div class="controls">
+      <button id="joinBtn">カメラに接続する</button>
+      <button id="fullscreenBtn">🖥️ 全画面表示</button>
+    </div>
+
+    <div class="status" id="status">部屋番号とパスワードを入力してください。</div>
     
-    <video id="localVideo" autoplay playsinline muted></video>
+    <div class="video-wrapper" id="videoWrapper">
+      <div class="rec-overlay" id="recOverlay">
+        <div class="rec-dot"></div>
+        <span>LIVE</span>
+      </div>
+      <video id="remoteVideo" autoplay playsinline title="ダブルクリックで全画面切り替え"></video>
+    </div>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBhN4EO4f3pOvLOfQGcXsv-778Yvz7HYhg",
@@ -56,93 +114,101 @@
       iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }]
     };
 
-    let localStream = null;
     let peerConnection = null;
+    let remoteStream = null;
 
-    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const videoWrapper = document.getElementById('videoWrapper');
     const statusText = document.getElementById('status');
-    const startBtn = document.getElementById('startBtn');
+    const joinBtn = document.getElementById('joinBtn');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const recOverlay = document.getElementById('recOverlay');
 
-    // カメラ起動
-    async function initCamera() {
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        localVideo.srcObject = localStream;
-        statusText.innerText = "カメラ準備完了。部屋番号とパスワードを設定して配信を開始してください。";
-        startBtn.disabled = false;
-      } catch (e) {
-        statusText.innerText = "カメラの取得に失敗: " + e.message;
-      }
-    }
-
-    // 配信開始処理
-    async function startBroadcasting() {
+    async function joinRoom() {
       const roomId = document.getElementById('roomId').value.trim();
-      const password = document.getElementById('roomPassword').value.trim();
+      const inputPassword = document.getElementById('roomPassword').value.trim();
 
-      if (!roomId || !password) {
-        alert("部屋番号とパスワードを両方入力してください！");
+      if (!roomId || !inputPassword) {
+        alert("部屋番号とパスワードを入力してください！");
         return;
       }
 
-      statusText.innerText = "シグナリングサーバーに接続中...";
-      startBtn.disabled = true;
+      statusText.innerText = "認証中...";
+      joinBtn.disabled = true;
 
       const roomRef = doc(db, 'rooms', roomId);
-      
-      // 古いデータが残っていたら削除（部屋の初期化）
-      await deleteDoc(roomRef);
+      const roomSnapshot = await getDoc(roomRef);
+
+      if (!roomSnapshot.exists()) {
+        statusText.innerText = "エラー: 部屋が見つかりません。配信を先に開始してください。";
+        joinBtn.disabled = false;
+        return;
+      }
+
+      const roomData = roomSnapshot.data();
+
+      if (roomData.password !== inputPassword) {
+        statusText.innerText = "❌ パスワードが一致しません！";
+        joinBtn.disabled = false;
+        return;
+      }
+
+      statusText.innerText = "接続を確立中...";
 
       peerConnection = new RTCPeerConnection(peerConfiguration);
+      remoteStream = new MediaStream();
+      remoteVideo.srcObject = remoteStream;
 
-      localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
-      });
+      peerConnection.ontrack = event => {
+        event.streams[0].getTracks().forEach(track => {
+          remoteStream.addTrack(track);
+        });
+        statusText.innerText = "⚡ ライブ映像を受信中";
+        recOverlay.style.display = "flex";
+        fullscreenBtn.style.display = "block";
+      };
 
-      const callerCandidatesCollection = collection(roomRef, 'callerCandidates');
+      const calleeCandidatesCollection = collection(roomRef, 'calleeCandidates');
       peerConnection.onicecandidate = event => {
         if (event.candidate) {
-          addDoc(callerCandidatesCollection, event.candidate.toJSON());
+          addDoc(calleeCandidatesCollection, event.candidate.toJSON());
         }
       };
 
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
+      const offer = roomData.offer;
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
 
-      // Offerと一緒に、設定したパスワードも暗号化せずそのままFirebaseに保存
-      const roomWithOffer = {
-        password: password, 
-        offer: {
-          type: offer.type,
-          sdp: offer.sdp
-        }
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+
+      const roomWithAnswer = {
+        answer: { type: answer.type, sdp: answer.sdp }
       };
-      await setDoc(roomRef, roomWithOffer);
-      statusText.innerText = `部屋「${roomId}」で待機中... ビューアーで接続してください。`;
+      await setDoc(roomRef, roomWithAnswer, { merge: true });
 
-      // 相手からのAnswer（応答）を待つ
-      onSnapshot(roomRef, async snapshot => {
-        const data = snapshot.data();
-        if (!peerConnection.currentRemoteDescription && data && data.answer) {
-          statusText.innerText = "ビューアーが接続しました！映像配信中...";
-          const rtcAnswerDescription = new RTCSessionDescription(data.answer);
-          await peerConnection.setRemoteDescription(rtcAnswerDescription);
-        }
-      });
-
-      // 相手からのICE接続候補を監視
-      onSnapshot(collection(roomRef, 'calleeCandidates'), snapshot => {
+      onSnapshot(collection(roomRef, 'callerCandidates'), snapshot => {
         snapshot.docChanges().forEach(async change => {
           if (change.type === 'added') {
-            let data = change.doc.data();
+            const data = change.doc.data();
             await peerConnection.addIceCandidate(new RTCIceCandidate(data));
           }
         });
       });
     }
 
-    window.addEventListener('DOMContentLoaded', initCamera);
-    startBtn.addEventListener('click', startBroadcasting);
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        videoWrapper.requestFullscreen().catch(err => {
+          alert(`全画面エラー: ${err.message}`);
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    joinBtn.addEventListener('click', joinRoom);
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+    remoteVideo.addEventListener('dblclick', toggleFullscreen);
   </script>
 </body>
 </html>
