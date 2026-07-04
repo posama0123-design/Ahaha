@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🏠 監視カメラ - 配信側 (アウトカメラ対応)</title>
+  <title>🏠 監視カメラ - 配信側 (16:9強制)</title>
   <style>
     :root {
       --bg-color: #0d1117;
@@ -36,7 +36,7 @@
 <body>
 
   <div class="container">
-    <h2>🎥 CAMERA BROADCAST PANEL (OUT-CAM)</h2>
+    <h2>🎥 CAMERA BROADCAST PANEL (16:9 Landscape)</h2>
     
     <div class="setup-box">
       <div class="input-group">
@@ -87,22 +87,40 @@
 
     async function initCamera() {
       try {
-        // カメラの設定変更：facingMode を environment (背面) に固定
+        // 【重要】解像度を「横向き16:9」に完全にロックする（exact指定）
         const constraints = {
           video: { 
-            facingMode: { ideal: "environment" }, // 外カメラ（うしろカメラ）を優先指定
-            width: { ideal: 1280 }, 
-            height: { ideal: 720 }, 
-            aspectRatio: 1.7777777778 
+            facingMode: { ideal: "environment" }, // アウトカメラを優先
+            width: { exact: 1280 },               // 1280ピクセル固定
+            height: { exact: 720 },               // 720ピクセル固定
+            aspectRatio: { exact: 1.7777777778 }  // 16:9アスペクト比固定
           },
           audio: true
         };
         localStream = await navigator.mediaDevices.getUserMedia(constraints);
         localVideo.srcObject = localStream;
-        statusText.innerText = "外カメラ準備完了。設定を済ませて配信を開始してください。";
+        statusText.innerText = "外カメラ準備完了（16:9横向き強制）。設定して配信を開始してください。";
         startBtn.disabled = false;
       } catch (e) {
-        statusText.innerText = "カメラの取得に失敗: " + e.message;
+        console.warn("厳格な16:9固定に失敗しました。標準モードで再試行します: ", e.message);
+        // 万が一、古いスマホなどで「exact」が原因で起動しなかった場合のセーフティ
+        try {
+          const fallbackConstraints = {
+            video: { 
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1280 }, 
+              height: { ideal: 720 }, 
+              aspectRatio: 1.7777777778 
+            },
+            audio: true
+          };
+          localStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+          localVideo.srcObject = localStream;
+          statusText.innerText = "外カメラ準備完了（標準互換モード）。";
+          startBtn.disabled = false;
+        } catch (err) {
+          statusText.innerText = "カメラの取得に失敗しました: " + err.message;
+        }
       }
     }
 
