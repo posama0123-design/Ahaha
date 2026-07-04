@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🏠 監視カメラ - 配信側 (90度強制回転コンバート)</title>
+  <title>🏠 監視カメラ - 配信側 (映像同期修正版)</title>
   <style>
     :root {
       --bg-color: #0d1117;
@@ -36,7 +36,7 @@
 <body>
 
   <div class="container">
-    <h2>🎥 CAMERA PANEL (90° Hardware Rotation)</h2>
+    <h2>🎥 CAMERA PANEL (90° Rotation Fixed)</h2>
     
     <div class="setup-box">
       <div class="input-group">
@@ -86,56 +86,51 @@
     const statusText = document.getElementById('status');
     const startBtn = document.getElementById('startBtn');
 
-    // 縦型映像を掴んだ場合、右に90度回転させて16:9に収めるリアルタイム変換処理
-    function createRotated169Stream(videoElement) {
+    // Canvasを用いた回転・描画マネージャー
+    function startCanvasProcessing(hiddenVideo) {
       const canvas = document.createElement('canvas');
-      // 出力は絶対に横長の 16:9 (1280x720)
       canvas.width = 1280;
       canvas.height = 720;
       const ctx = canvas.getContext('2d');
 
       function draw() {
-        if (!videoElement.paused && !videoElement.ended) {
+        if (!hiddenVideo.paused && !hiddenVideo.ended) {
           ctx.fillStyle = "#000000";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-          const vWidth = videoElement.videoWidth;
-          const vHeight = videoElement.videoHeight;
+          const vWidth = hiddenVideo.videoWidth;
+          const vHeight = hiddenVideo.videoHeight;
 
-          ctx.save();
-          
-          if (vHeight > vWidth) {
-            // 【映像が縦長（9:16）の場合】
-            // キャンバスの中心に原点を移動
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            // 時計回りに90度回転
-            ctx.rotate(90 * Math.PI / 180);
+          // 映像データがまだ正常に取れていない場合はスキップ
+          if (vWidth > 0 && vHeight > 0) {
+            ctx.save();
             
-            // 回転後の縦横比率を計算して、1280x720の画面にぴったりフィットさせる
-            // 縦長映像の高さ(vHeight)が、横長画面の幅(1280)に対応するよう拡縮
-            const scale = canvas.width / vHeight;
-            const drawWidth = vWidth * scale;
-            const drawHeight = vHeight * scale;
+            if (vHeight > vWidth) {
+              // 縦長(9:16)映像の時の90度時計回り回転ロジック
+              ctx.translate(canvas.width / 2, canvas.height / 2);
+              ctx.rotate(90 * Math.PI / 180);
+              
+              const scale = canvas.width / vHeight;
+              const drawWidth = vWidth * scale;
+              const drawHeight = vHeight * scale;
 
-            // 中心が揃うようにずらして描画
-            ctx.drawImage(videoElement, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-          } else {
-            // 【映像が最初から横長（16:9）の場合】
-            // 通常通りそのまま描画
-            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+              ctx.drawImage(hiddenVideo, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+            } else {
+              // 最初から横長(16:9)の場合
+              ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+            }
+            
+            ctx.restore();
           }
-          
-          ctx.restore();
         }
         requestAnimationFrame(draw);
       }
       
-      videoElement.addEventListener('play', () => {
-        draw();
-      });
+      // ループ描画開始
+      draw();
 
-      // キャンバスから高画質なストリームを生成（24fps）
-      return canvas.captureStream(24);
+      // キャンバスから直接ビデオトラックを抽出
+      return canvas.captureStream(24).getVideoTracks()[0];
     }
 
     async function initCamera() {
@@ -147,26 +142,33 @@
         
         rawStream = await navigator.mediaDevices.getUserMedia(constraints);
         
-        // バックグラウンドで再生するための隠しvideo要素
+        // 隠しVideo要素の設定と再生
         const hiddenVideo = document.createElement('video');
         hiddenVideo.srcObject = rawStream;
         hiddenVideo.muted = true;
         hiddenVideo.playsInline = true;
-        await hiddenVideo.play();
-
-        // 90度回転＆16:9変換処理を実行
-        processedStream = createRotated169Stream(hiddenVideo);
         
-        // マイク音声トラックがあれば合成
-        rawStream.getAudioTracks().forEach(track => {
-          processedStream.addTrack(track);
-        });
+        // メタデータの読み込み完了（解像度が確定するの）を待ってから再生
+        hiddenVideo.onloadedmetadata = async () => {
+          await hiddenVideo.play();
 
-        // 配信側パネルのプレビューに変換後の映像をセット
-        localVideo.srcObject = processedStream;
-        
-        statusText.innerText = "カメラ回転システム起動完了。配信を開始してください。";
-        startBtn.disabled = false;
+          // 映像が確定した状態でCanvas処理を開始して、ビデオトラックを生成
+          const videoTrack = startCanvasProcessing(hiddenVideo);
+          
+          // 新しい配信用MediaStreamを作成し、加工済みビデオと生マイク音声をセット
+          processedStream = new MediaStream();
+          processedStream.addTrack(videoTrack);
+          
+          rawStream.getAudioTracks().forEach(track => {
+            processedStream.addTrack(track);
+          });
+
+          // プレビュー表示
+          localVideo.srcObject = processedStream;
+          
+          statusText.innerText = "カメラ回転システム起動完了。配信を開始してください。";
+          startBtn.disabled = false;
+        };
       } catch (e) {
         statusText.innerText = "カメラの取得に失敗: " + e.message;
       }
@@ -189,7 +191,7 @@
 
       peerConnection = new RTCPeerConnection(peerConfiguration);
 
-      // 強制変換したストリームのトラックをWebRTC経由で送信
+      // 確定したprocessedStreamからトラックを追加
       processedStream.getTracks().forEach(track => {
         peerConnection.addTrack(track, processedStream);
       });
