@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>📱 監視カメラ - ビューアー (16:9 Fullscreen)</title>
+  <title>📱 監視カメラ - ビューアー (ミュート機能付き)</title>
   <style>
     :root {
       --bg-color: #0d1117;
       --panel-bg: #161b22;
       --accent-cyan: #00ecff;
+      --accent-red: #ff7b72;
     }
 
     body { background: var(--bg-color); color: #fff; font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
@@ -18,10 +19,16 @@
     label { display: block; margin-bottom: 5px; font-size: 13px; color: #8b949e; }
     input { width: 100%; padding: 8px; border: 1px solid #30363d; background: var(--bg-color); color: #fff; border-radius: 4px; box-sizing: border-box; }
     
-    .controls { display: flex; gap: 10px; margin-bottom: 15px; }
-    button { flex: 1; padding: 12px; font-size: 15px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; transition: background 0.2s; }
+    .controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+    button { flex: 1; min-width: 120px; padding: 12px; font-size: 15px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; transition: background 0.2s, color 0.2s; }
+    
     #joinBtn { background: #238636; color: white; }
     #joinBtn:hover { background: #2ea44f; }
+    
+    /* ミュートボタンのスタイル */
+    #muteBtn { background: #c9d1d9; color: #0d1117; display: none; }
+    #muteBtn.muted { background: var(--accent-red); color: white; }
+    
     #fullscreenBtn { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; display: none; }
     #fullscreenBtn:hover { background: #30363d; }
     button:disabled { background: #21262d !important; color: #484f58 !important; border: 1px solid #30363d; cursor: not-allowed; }
@@ -56,7 +63,7 @@
       letter-spacing: 1px;
       pointer-events: none;
     }
-    .rec-dot { width: 10px; height: 10px; background: #ff7b72; border-radius: 50%; animation: blink 1s infinite; }
+    .rec-dot { width: 10px; height: 10px; background: var(--accent-red); border-radius: 50%; animation: blink 1s infinite; }
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 
     video::-webkit-media-controls { display:none !important; }
@@ -80,6 +87,7 @@
 
     <div class="controls">
       <button id="joinBtn">カメラに接続する</button>
+      <button id="muteBtn">🔊 音声をミュート</button>
       <button id="fullscreenBtn">🖥️ 全画面表示</button>
     </div>
 
@@ -122,6 +130,7 @@
     const videoWrapper = document.getElementById('videoWrapper');
     const statusText = document.getElementById('status');
     const joinBtn = document.getElementById('joinBtn');
+    const muteBtn = document.getElementById('muteBtn');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
     const recOverlay = document.getElementById('recOverlay');
 
@@ -166,6 +175,7 @@
         });
         statusText.innerText = "⚡ ライブ映像を受信中";
         recOverlay.style.display = "flex";
+        muteBtn.style.display = "block"; // 接続成功時に表示
         fullscreenBtn.style.display = "block";
       };
 
@@ -197,6 +207,19 @@
       });
     }
 
+    // ミュート切り替え関数
+    function toggleMute() {
+      if (remoteVideo.muted) {
+        remoteVideo.muted = false;
+        muteBtn.innerText = "🔊 音声をミュート";
+        muteBtn.classList.remove('muted');
+      } else {
+        remoteVideo.muted = true;
+        muteBtn.innerText = "🔇 ミュート解除";
+        muteBtn.classList.add('muted');
+      }
+    }
+
     function toggleFullscreen() {
       if (!document.fullscreenElement) {
         videoWrapper.requestFullscreen().catch(err => {
@@ -208,6 +231,7 @@
     }
 
     joinBtn.addEventListener('click', joinRoom);
+    muteBtn.addEventListener('click', toggleMute);
     fullscreenBtn.addEventListener('click', toggleFullscreen);
     remoteVideo.addEventListener('dblclick', toggleFullscreen);
   </script>
