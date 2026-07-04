@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🏠 監視カメラ - 配信側 (16:9強制)</title>
+  <title>🏠 監視カメラ - 配信側 (90度強制回転コンバート)</title>
   <style>
     :root {
       --bg-color: #0d1117;
@@ -36,7 +36,7 @@
 <body>
 
   <div class="container">
-    <h2>🎥 CAMERA BROADCAST PANEL (16:9 Landscape)</h2>
+    <h2>🎥 CAMERA PANEL (90° Hardware Rotation)</h2>
     
     <div class="setup-box">
       <div class="input-group">
@@ -78,49 +78,97 @@
       iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }]
     };
 
-    let localStream = null;
+    let rawStream = null;
+    let processedStream = null;
     let peerConnection = null;
 
     const localVideo = document.getElementById('localVideo');
     const statusText = document.getElementById('status');
     const startBtn = document.getElementById('startBtn');
 
+    // 縦型映像を掴んだ場合、右に90度回転させて16:9に収めるリアルタイム変換処理
+    function createRotated169Stream(videoElement) {
+      const canvas = document.createElement('canvas');
+      // 出力は絶対に横長の 16:9 (1280x720)
+      canvas.width = 1280;
+      canvas.height = 720;
+      const ctx = canvas.getContext('2d');
+
+      function draw() {
+        if (!videoElement.paused && !videoElement.ended) {
+          ctx.fillStyle = "#000000";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          const vWidth = videoElement.videoWidth;
+          const vHeight = videoElement.videoHeight;
+
+          ctx.save();
+          
+          if (vHeight > vWidth) {
+            // 【映像が縦長（9:16）の場合】
+            // キャンバスの中心に原点を移動
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            // 時計回りに90度回転
+            ctx.rotate(90 * Math.PI / 180);
+            
+            // 回転後の縦横比率を計算して、1280x720の画面にぴったりフィットさせる
+            // 縦長映像の高さ(vHeight)が、横長画面の幅(1280)に対応するよう拡縮
+            const scale = canvas.width / vHeight;
+            const drawWidth = vWidth * scale;
+            const drawHeight = vHeight * scale;
+
+            // 中心が揃うようにずらして描画
+            ctx.drawImage(videoElement, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+          } else {
+            // 【映像が最初から横長（16:9）の場合】
+            // 通常通りそのまま描画
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+          }
+          
+          ctx.restore();
+        }
+        requestAnimationFrame(draw);
+      }
+      
+      videoElement.addEventListener('play', () => {
+        draw();
+      });
+
+      // キャンバスから高画質なストリームを生成（24fps）
+      return canvas.captureStream(24);
+    }
+
     async function initCamera() {
       try {
-        // 【重要】解像度を「横向き16:9」に完全にロックする（exact指定）
         const constraints = {
-          video: { 
-            facingMode: { ideal: "environment" }, // アウトカメラを優先
-            width: { exact: 1280 },               // 1280ピクセル固定
-            height: { exact: 720 },               // 720ピクセル固定
-            aspectRatio: { exact: 1.7777777778 }  // 16:9アスペクト比固定
-          },
+          video: { facingMode: { ideal: "environment" } },
           audio: true
         };
-        localStream = await navigator.mediaDevices.getUserMedia(constraints);
-        localVideo.srcObject = localStream;
-        statusText.innerText = "外カメラ準備完了（16:9横向き強制）。設定して配信を開始してください。";
+        
+        rawStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        // バックグラウンドで再生するための隠しvideo要素
+        const hiddenVideo = document.createElement('video');
+        hiddenVideo.srcObject = rawStream;
+        hiddenVideo.muted = true;
+        hiddenVideo.playsInline = true;
+        await hiddenVideo.play();
+
+        // 90度回転＆16:9変換処理を実行
+        processedStream = createRotated169Stream(hiddenVideo);
+        
+        // マイク音声トラックがあれば合成
+        rawStream.getAudioTracks().forEach(track => {
+          processedStream.addTrack(track);
+        });
+
+        // 配信側パネルのプレビューに変換後の映像をセット
+        localVideo.srcObject = processedStream;
+        
+        statusText.innerText = "カメラ回転システム起動完了。配信を開始してください。";
         startBtn.disabled = false;
       } catch (e) {
-        console.warn("厳格な16:9固定に失敗しました。標準モードで再試行します: ", e.message);
-        // 万が一、古いスマホなどで「exact」が原因で起動しなかった場合のセーフティ
-        try {
-          const fallbackConstraints = {
-            video: { 
-              facingMode: { ideal: "environment" },
-              width: { ideal: 1280 }, 
-              height: { ideal: 720 }, 
-              aspectRatio: 1.7777777778 
-            },
-            audio: true
-          };
-          localStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
-          localVideo.srcObject = localStream;
-          statusText.innerText = "外カメラ準備完了（標準互換モード）。";
-          startBtn.disabled = false;
-        } catch (err) {
-          statusText.innerText = "カメラの取得に失敗しました: " + err.message;
-        }
+        statusText.innerText = "カメラの取得に失敗: " + e.message;
       }
     }
 
@@ -141,8 +189,9 @@
 
       peerConnection = new RTCPeerConnection(peerConfiguration);
 
-      localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
+      // 強制変換したストリームのトラックをWebRTC経由で送信
+      processedStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, processedStream);
       });
 
       const callerCandidatesCollection = collection(roomRef, 'callerCandidates');
